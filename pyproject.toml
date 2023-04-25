@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "trabalho-contraste"
+version = "0.1.0"
+description = ""
+authors = ["Otavio Almeida <otavioalmeida650@gmail.com>"]
+readme = "README.md"
+packages = [{include = "trabalho_contraste"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pillow = "^9.5.0"
+plotly = "^5.14.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
