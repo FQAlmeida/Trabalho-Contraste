@@ -10,6 +10,10 @@ packages = [{include = "trabalho_contraste"}]
 python = "^3.11"
 pillow = "^9.5.0"
 plotly = "^5.14.1"
+numpy = "^1.24.3"
+polars = "^0.17.9"
+pandas = "^2.0.1"
+pyarrow = "^11.0.0"
 
 
 [build-system]
