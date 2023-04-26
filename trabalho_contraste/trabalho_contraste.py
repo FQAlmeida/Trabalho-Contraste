@@ -1,10 +1,11 @@
-from PIL import Image
-from pathlib import Path
-import numpy as np
-import polars as pl
 from functools import reduce
 from operator import mul
+from pathlib import Path
+
+import numpy as np
 import plotly.express as px
+import polars as pl
+from PIL import Image
 
 # Load images
 IMG_FOLDER = Path("data")
@@ -60,8 +61,9 @@ for df in images_dfs:
         },
         schema={"Pixels": pl.UInt8, "Qtd Pixels": pl.UInt64},
     )
+    histogram_df = pl.concat([grouped_df, missing_df], how="vertical")
     px.bar(
-        data_frame=grouped_df.extend(missing_df).to_pandas(),
+        data_frame=histogram_df.to_pandas(),
         x="Pixels",
         y="Qtd Pixels",
     )
@@ -97,15 +99,50 @@ print("Desvios Padrão: ", stds)
 entropies = [image.entropy() for image in images]
 print("Entropias: ", entropies)
 
+
+def norm_hist(histograma: np.ndarray):
+    probabilities = histograma / histograma.sum()
+    summed_probs = np.array(
+        reduce(lambda old, new: [*old, old[-1] + new], probabilities, [0])
+    )
+
+    summed_probs_rounded = np.rint(255 * summed_probs)
+
+    probs_df = pl.DataFrame(
+        {
+            "IndexProb": [
+                *list(range(summed_probs.shape[0])),
+                *list(range(summed_probs_rounded.shape[0])),
+            ],
+            "Probability": [*(255 * summed_probs), *summed_probs_rounded],
+            "Type": [
+                *["Sum" for _ in range(summed_probs.shape[0])],
+                *["Rounded Sum" for _ in range(summed_probs_rounded.shape[0])],
+            ],
+        }
+    )
+
+    px.line(
+        data_frame=probs_df.to_pandas(),
+        x="IndexProb",
+        y="Probability",
+        color="Type",
+    )
+
+    return probs_df
+
+
 # Histogram
-for df in images_dfs:
+for index, df in enumerate(images_dfs):
     grouped_df = df.groupby("Pixels").agg(
         pl.col("Pixels").count().alias("Qtd Pixels").cast(pl.UInt64)
     )
+
     non_existent_gray_values = np.array(
         [grey for grey in range(256) if grey not in grouped_df["Pixels"].unique()],
         dtype=np.uint8,
     )
+
     missing_df = pl.DataFrame(
         {
             "Pixels": non_existent_gray_values,
@@ -113,11 +150,31 @@ for df in images_dfs:
         },
         schema={"Pixels": pl.UInt8, "Qtd Pixels": pl.UInt64},
     )
+
+    histogram_df = pl.concat([grouped_df, missing_df], how="vertical")
+
     px.bar(
-        data_frame=grouped_df.extend(missing_df).to_pandas(),
+        data_frame=histogram_df.to_pandas(),
         x="Pixels",
         y="Qtd Pixels",
     )
 
-def norm_hist():
-    ...
+    probs_df = norm_hist(
+        histogram_df.sort("Pixels", descending=False)["Qtd Pixels"].to_numpy()
+    )
+    probs_rounded_df = probs_df.filter(pl.col("Type") == "Rounded Sum")
+    probs_rounded = probs_rounded_df.to_pandas()
+
+    def convert_pixel(value):
+        return probs_rounded["Probability"][value]
+
+    # print(df.with_columns([pl.col("Pixels").apply(convert_pixel).alias("NormPixels")]))
+    vec_conv_pixel = np.vectorize(convert_pixel)
+    pixels = df["Pixels"].to_numpy()
+    print(pixels.shape)
+    pixels_norm: np.ndarray = vec_conv_pixel(pixels)
+    pixels_norm = pixels_norm.reshape(images_matrix[index].shape)
+    img_norm = Image.fromarray(pixels_norm)
+    # img_norm.show()
+
+    # TODO(Otavio): Still need to reapply metrics, and redo histograms
