@@ -12,8 +12,9 @@ pillow = "^9.5.0"
 plotly = "^5.14.1"
 numpy = "^1.24.3"
 polars = "^0.17.9"
-pandas = "^2.0.1"
 pyarrow = "^11.0.0"
+taskipy = "^1.10.4"
+streamlit = "^1.21.0"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -23,3 +24,6 @@ black = "^23.3.0"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.taskipy.tasks]
+dashboard = "poetry run streamlit run trabalho_contraste/dashboard/Contraste.py"
