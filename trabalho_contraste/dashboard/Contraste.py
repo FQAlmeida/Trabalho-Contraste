@@ -454,26 +454,8 @@ for name, histogram_df in histogramas_yiq.items():
 
     conversion_yiq_funcs[name] = probs_rounded_y_df["Probability"].to_numpy()
 
-for name, df in histogramas_yiq.items():
-    st.plotly_chart(
-        px.bar(
-            title=f"Histograma {name}",
-            data_frame=df.to_pandas(),
-            x="PixelsY",
-            y="Qtd Pixels",
-        ),
-        use_container_width=True,
-    )
-    st.plotly_chart(
-        px.line(
-            data_frame=probs_yiq_dfs[name].to_pandas(),
-            x="IndexProb",
-            y="Probability",
-            color="Type",
-        )
-    )
 
-
+histogramas_norm_yiq: Dict[str, pl.DataFrame] = dict()
 norm_yiq_images: Dict[str, Image.Image] = dict()
 for name, image in images.items():
     pixels = rgb2yiq(np.array(image) / 255)
@@ -486,18 +468,67 @@ for name, image in images.items():
     # pixels_norm = pixels_norm.reshape(images_matrix[name].shape)
     image_arr[:, :, 0] = pixels_norm_y
     image_arr = yiq2rgb(image_arr / 255)
-    image_arr_m = image_arr[:, :, 0] - np.min(image_arr[:, :, 0])
-    image_arr_n = np.rint(255 * (pixels_m / np.max(pixels_m)))
-    image_arr[:, :, 0] = image_arr_n
-    image_arr_m = image_arr[:, :, 1] - np.min(image_arr[:, :, 1])
-    image_arr_n = np.rint(255 * (pixels_m / np.max(pixels_m)))
-    image_arr[:, :, 1] = image_arr_n
-    image_arr_m = image_arr[:, :, 2] - np.min(image_arr[:, :, 2])
-    image_arr_n = np.rint(255 * (pixels_m / np.max(pixels_m)))
-    image_arr[:, :, 2] = image_arr_n
-    st.write(image_arr.shape)
-    img_norm = Image.fromarray(image_arr.astype(np.uint8), mode="RGB")
+
+    # image_arr_m = image_arr[:, :, 0] - np.min(image_arr[:, :, 0])
+    # image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
+    # image_arr[:, :, 0] = image_arr_n
+    # image_arr_m = image_arr[:, :, 1] - np.min(image_arr[:, :, 1])
+    # image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
+    # image_arr[:, :, 1] = image_arr_n
+    # image_arr_m = image_arr[:, :, 2] - np.min(image_arr[:, :, 2])
+    # image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
+    # image_arr[:, :, 2] = image_arr_n
+
+    image_arr_m = image_arr - np.min(image_arr)
+    image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
+
+    st.write(image_arr_n.shape)
+    img_norm = Image.fromarray(image_arr_n.astype(np.uint8), mode="RGB")
+
+    histogram_df = get_histograma(
+        pl.DataFrame(
+            data={
+                "PixelsY": pixels_norm_y.reshape(reduce(mul, image_arr_n.shape[:-1])),
+            },
+            schema={"PixelsY": pl.UInt8},
+        ),
+        "PixelsY",
+    )
+
+    histogramas_norm_yiq[name] = histogram_df
     norm_yiq_images[name] = img_norm
+
+for name, df in histogramas_yiq.items():
+    histogram_norm_yiq = histogramas_norm_yiq[name]
+    col1, col2 = st.columns(2)
+    with col1:
+        st.plotly_chart(
+            px.bar(
+                title=f"Histograma {name}",
+                data_frame=df.to_pandas(),
+                x="PixelsY",
+                y="Qtd Pixels",
+            ),
+            use_container_width=True,
+        )
+    with col2:
+        st.plotly_chart(
+            px.bar(
+                title=f"Histograma {name} Normalizado",
+                data_frame=histogram_norm_yiq.to_pandas(),
+                x="PixelsY",
+                y="Qtd Pixels",
+            ),
+            use_container_width=True,
+        )
+    st.plotly_chart(
+        px.line(
+            data_frame=probs_yiq_dfs[name].to_pandas(),
+            x="IndexProb",
+            y="Probability",
+            color="Type",
+        )
+    )
 
 cols = st.columns(len(norm_yiq_images))
 
