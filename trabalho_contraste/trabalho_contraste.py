@@ -168,7 +168,6 @@ for index, df in enumerate(images_dfs):
     def convert_pixel(value):
         return probs_rounded["Probability"][value]
 
-    # print(df.with_columns([pl.col("Pixels").apply(convert_pixel).alias("NormPixels")]))
     vec_conv_pixel = np.vectorize(convert_pixel)
     pixels = df["Pixels"].to_numpy()
     print(pixels.shape)
