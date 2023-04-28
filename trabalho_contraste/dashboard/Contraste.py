@@ -6,7 +6,6 @@ from typing import Dict, List
 import numpy as np
 import plotly.express as px
 import polars as pl
-from typing import Callable
 import streamlit as st
 from PIL import Image
 
