@@ -6,6 +6,7 @@ from typing import Dict, List
 import numpy as np
 import plotly.express as px
 import polars as pl
+from typing import Union, Literal
 import streamlit as st
 from PIL import Image
 
@@ -23,9 +24,11 @@ image_paths = [
 
 
 @st.cache_data
-def load_images(image_paths: List[Path]) -> Dict[str, Image.Image]:
+def load_images(
+    image_paths: List[Path], color_scheme: Literal["RGB", "L"] = "L"
+) -> Dict[str, Image.Image]:
     return {
-        image_path.name: Image.open(image_path).convert("L")
+        image_path.name: Image.open(image_path).convert(color_scheme)
         for image_path in image_paths
     }
 
@@ -166,22 +169,26 @@ def norm_hist(histograma: np.ndarray):
 histogramas: Dict[str, pl.DataFrame] = dict()
 
 
-def get_histograma(df: pl.DataFrame):
-    grouped_df = df.groupby("Pixels").agg(
-        pl.col("Pixels").count().alias("Qtd Pixels").cast(pl.UInt64)
+def get_histograma(
+    df: pl.DataFrame, pixel_col: Union[Literal["Pixels"], str] = "Pixels"
+):
+    grouped_df = (
+        df.groupby(pixel_col)
+        .agg(pl.col(pixel_col).count().alias("Qtd Pixels").cast(pl.UInt64))
+        .with_columns([pl.col(pixel_col).cast(pl.UInt8)])
     )
 
     non_existent_gray_values = np.array(
-        [grey for grey in range(256) if grey not in grouped_df["Pixels"].unique()],
+        [grey for grey in range(256) if grey not in grouped_df[pixel_col].unique()],
         dtype=np.uint8,
     )
 
     missing_df = pl.DataFrame(
         {
-            "Pixels": non_existent_gray_values,
+            pixel_col: non_existent_gray_values,
             "Qtd Pixels": np.zeros(non_existent_gray_values.shape),
         },
-        schema={"Pixels": pl.UInt8, "Qtd Pixels": pl.UInt64},
+        schema={pixel_col: pl.UInt8, "Qtd Pixels": pl.UInt64},
     )
 
     histogram_df = pl.concat([grouped_df, missing_df], how="vertical")
@@ -202,7 +209,6 @@ for name, df in images_dfs.items():
     #     )
     # )
 
-counter = 0
 conversion_funcs: Dict[str, np.ndarray] = dict()
 probs_dfs: Dict[str, pl.DataFrame] = dict()
 for name, histogram_df in histogramas.items():
@@ -217,24 +223,27 @@ for name, histogram_df in histogramas.items():
     conversion_funcs[name] = probs_rounded["Probability"].to_numpy()
 
 
-def _apply_filter(pixels: np.ndarray, name: str):
-    vec_conv_pixel = conversion_funcs[name]
-    result = np.array(list(map(lambda x: vec_conv_pixel[x], pixels)))
+def _apply_filter(pixels: np.ndarray, name: str, func: Dict[str, np.ndarray]):
+    st.write(pixels)
+    result = np.array(list(map(lambda x: func[name][int(x)], pixels)))
     return result
 
 
 @st.cache_data
-def apply_filter(name: str, pixels: np.ndarray):
+def apply_filter(
+    name: str, pixels: np.ndarray, conversion_rgb_funcs: Dict[str, np.ndarray]
+):
     with ThreadPool() as pool:
-        result = pool.map(partial(_apply_filter, name=name), pixels)
+        result = pool.map(
+            partial(_apply_filter, name=name, func=conversion_rgb_funcs), pixels
+        )
     return np.array(result)
 
 
 norm_images: Dict[str, Image.Image] = dict()
 for name, image in images.items():
     pixels = np.array(image)
-    pixels_norm = apply_filter(name, pixels)
-    counter += 1
+    pixels_norm = apply_filter(name, pixels, conversion_funcs)
     # pixels_norm = pixels_norm.reshape(images_matrix[name].shape)
     img_norm = Image.fromarray(pixels_norm)
     norm_images[name] = img_norm
@@ -287,3 +296,211 @@ cols = st.columns(len(norm_images))
 for index, col in enumerate(cols):
     with col:
         st.image(list(norm_images.values())[index].convert("RGB"))
+
+st.subheader("Etapa 3")
+image_paths = [
+    IMG_FOLDER / "outono_LC.png",
+    IMG_FOLDER / "predios.jpeg",
+]
+
+images = load_images(image_paths, "RGB")
+
+cols = st.columns(len(images))
+
+for index, col in enumerate(cols):
+    with col:
+        st.image(list(images.values())[index])
+
+image_matrixes = get_img_matrixes(images)
+
+
+def get_img_dfs_rgb(images_matrix: Dict[str, np.ndarray]):
+    return {
+        name: pl.DataFrame(
+            data={
+                "PixelsR": matrix[:, :, 0].reshape(reduce(mul, matrix.shape[:-1])),
+                "PixelsG": matrix[:, :, 1].reshape(reduce(mul, matrix.shape[:-1])),
+                "PixelsB": matrix[:, :, 2].reshape(reduce(mul, matrix.shape[:-1])),
+            },
+            schema={"PixelsR": pl.UInt8, "PixelsG": pl.UInt8, "PixelsB": pl.UInt8},
+        )
+        for name, matrix in images_matrix.items()
+    }
+
+
+images_dfs = get_img_dfs_rgb(image_matrixes)
+histogramas_rgb: Dict[str, Dict[str, pl.DataFrame]] = dict()
+
+for name, df in images_dfs.items():
+    histogram_df_red = get_histograma(df, "PixelsR")
+    histogram_df_blue = get_histograma(df, "PixelsB")
+    histogram_df_green = get_histograma(df, "PixelsG")
+    histogramas_rgb[f"{name}"] = {
+        "red": histogram_df_red,
+        "green": histogram_df_green,
+        "blue": histogram_df_blue,
+    }
+
+conversion_rgb_funcs: Dict[str, np.ndarray] = dict()
+probs_rgb_dfs: Dict[str, Dict[str, pl.DataFrame]] = dict()
+for name, histogram_df in histogramas_rgb.items():
+    probs_df_red = norm_hist(
+        histogram_df["red"].sort("PixelsR", descending=False)["Qtd Pixels"].to_numpy()
+    )
+    probs_df_green = norm_hist(
+        histogram_df["green"].sort("PixelsG", descending=False)["Qtd Pixels"].to_numpy()
+    )
+    probs_df_blue = norm_hist(
+        histogram_df["blue"].sort("PixelsB", descending=False)["Qtd Pixels"].to_numpy()
+    )
+
+    probs_rgb_dfs[name] = {
+        "red": probs_df_red,
+        "green": probs_df_green,
+        "blue": probs_df_blue,
+    }
+
+    probs_rounded_red_df = probs_df_red.filter(pl.col("Type") == "Rounded Sum")
+    probs_rounded_green_df = probs_df_green.filter(pl.col("Type") == "Rounded Sum")
+    probs_rounded_blue_df = probs_df_blue.filter(pl.col("Type") == "Rounded Sum")
+
+    conversion_rgb_funcs[f"{name} red"] = probs_rounded_red_df["Probability"].to_numpy()
+    conversion_rgb_funcs[f"{name} green"] = probs_rounded_green_df[
+        "Probability"
+    ].to_numpy()
+    conversion_rgb_funcs[f"{name} blue"] = probs_rounded_blue_df[
+        "Probability"
+    ].to_numpy()
+
+norm_rgb_images: Dict[str, Image.Image] = dict()
+for name, image in images.items():
+    pixels = np.array(image)
+    pixels_norm_red = apply_filter(f"{name} red", pixels[:, :, 0], conversion_rgb_funcs)
+    pixels_norm_green = apply_filter(
+        f"{name} green", pixels[:, :, 1], conversion_rgb_funcs
+    )
+    pixels_norm_blue = apply_filter(
+        f"{name} blue", pixels[:, :, 2], conversion_rgb_funcs
+    )
+    image_arr = np.zeros((*pixels_norm_blue.shape, 3), dtype=np.uint8)
+    # pixels_norm = pixels_norm.reshape(images_matrix[name].shape)
+    image_arr[:, :, 0] = pixels_norm_red
+    image_arr[:, :, 1] = pixels_norm_green
+    image_arr[:, :, 2] = pixels_norm_blue
+
+    img_norm = Image.fromarray(image_arr)
+    norm_rgb_images[name] = img_norm
+
+cols = st.columns(len(norm_rgb_images))
+
+for index, col in enumerate(cols):
+    with col:
+        st.image(list(norm_rgb_images.values())[index].convert("RGB"))
+
+from skimage.color import rgb2yiq, yiq2rgb
+
+
+def convert_to_yiq():
+    ...
+
+
+def get_img_dfs_yiq(images_matrix: Dict[str, np.ndarray]):
+    return {
+        name: pl.DataFrame(
+            data={
+                "PixelsY": matrix[:, :, 0].reshape(reduce(mul, matrix.shape[:-1])),
+                "PixelsI": matrix[:, :, 1].reshape(reduce(mul, matrix.shape[:-1])),
+                "PixelsQ": matrix[:, :, 2].reshape(reduce(mul, matrix.shape[:-1])),
+            },
+            schema={"PixelsY": pl.UInt8, "PixelsI": pl.UInt8, "PixelsQ": pl.UInt8},
+        )
+        for name, matrix in [
+            (
+                name,
+                (
+                    255
+                    * (
+                        rgb2yiq(np.array(image) / 255)
+                        - np.min(rgb2yiq(np.array(image) / 255))
+                        / np.max(
+                            rgb2yiq(np.array(image) / 255)
+                            - np.min(rgb2yiq(np.array(image) / 255))
+                        )
+                    )
+                ).astype(np.uint8),
+            )
+            for name, image in images_matrix.items()
+        ]
+    }
+
+
+images_dfs = get_img_dfs_yiq(image_matrixes)
+
+histogramas_yiq: Dict[str, pl.DataFrame] = dict()
+for name, df in images_dfs.items():
+    histogram_df = get_histograma(df, "PixelsY")
+    histogramas_yiq[name] = histogram_df
+
+conversion_yiq_funcs: Dict[str, np.ndarray] = dict()
+probs_yiq_dfs: Dict[str, pl.DataFrame] = dict()
+for name, histogram_df in histogramas_yiq.items():
+    probs_df_y = norm_hist(
+        histogram_df.sort("PixelsY", descending=False)["Qtd Pixels"].to_numpy()
+    )
+
+    probs_yiq_dfs[name] = probs_df_y
+
+    probs_rounded_y_df = probs_df_y.filter(pl.col("Type") == "Rounded Sum")
+
+    conversion_yiq_funcs[name] = probs_rounded_y_df["Probability"].to_numpy()
+
+for name, df in histogramas_yiq.items():
+    st.plotly_chart(
+        px.bar(
+            title=f"Histograma {name}",
+            data_frame=df.to_pandas(),
+            x="PixelsY",
+            y="Qtd Pixels",
+        ),
+        use_container_width=True,
+    )
+    st.plotly_chart(
+        px.line(
+            data_frame=probs_yiq_dfs[name].to_pandas(),
+            x="IndexProb",
+            y="Probability",
+            color="Type",
+        )
+    )
+
+
+norm_yiq_images: Dict[str, Image.Image] = dict()
+for name, image in images.items():
+    pixels = rgb2yiq(np.array(image) / 255)
+    pixels_m = pixels[:, :, 0] - np.min(pixels[:, :, 0])
+    pixels_n = 255 * (pixels_m / np.max(pixels_m))
+    # st.write(np.rint(pixels_n))
+    pixels_norm_y = apply_filter(name, np.rint(pixels_n), conversion_yiq_funcs)
+
+    image_arr = pixels.copy()
+    # pixels_norm = pixels_norm.reshape(images_matrix[name].shape)
+    image_arr[:, :, 0] = pixels_norm_y
+    image_arr = yiq2rgb(image_arr / 255)
+    image_arr_m = image_arr[:, :, 0] - np.min(image_arr[:, :, 0])
+    image_arr_n = np.rint(255 * (pixels_m / np.max(pixels_m)))
+    image_arr[:, :, 0] = image_arr_n
+    image_arr_m = image_arr[:, :, 1] - np.min(image_arr[:, :, 1])
+    image_arr_n = np.rint(255 * (pixels_m / np.max(pixels_m)))
+    image_arr[:, :, 1] = image_arr_n
+    image_arr_m = image_arr[:, :, 2] - np.min(image_arr[:, :, 2])
+    image_arr_n = np.rint(255 * (pixels_m / np.max(pixels_m)))
+    image_arr[:, :, 2] = image_arr_n
+    st.write(image_arr.shape)
+    img_norm = Image.fromarray(image_arr.astype(np.uint8), mode="RGB")
+    norm_yiq_images[name] = img_norm
+
+cols = st.columns(len(norm_yiq_images))
+
+for index, col in enumerate(cols):
+    with col:
+        st.image(list(norm_yiq_images.values())[index].convert("RGB"))
