@@ -456,38 +456,143 @@ for name, histogram_df in histogramas_yiq.items():
 
 histogramas_norm_yiq: Dict[str, pl.DataFrame] = dict()
 norm_yiq_images: Dict[str, Image.Image] = dict()
-for name, image in images.items():
-    pixels = rgb2yiq(np.array(image) / 255)
-    pixels_m = pixels[:, :, 0] - np.min(pixels[:, :, 0])
-    pixels_n = 255 * (pixels_m / np.max(pixels_m))
-    # st.write(np.rint(pixels_n))
-    pixels_norm_y = apply_filter(name, np.rint(pixels_n), conversion_yiq_funcs)
+for name, df in images_dfs.items():
+    image = image_matrixes[name]
+    pixels = df["PixelsY"].to_numpy().reshape(image.shape[:-1])
 
-    image_arr = pixels.copy()
+    pixels_norm_y = apply_filter(name, pixels, conversion_yiq_funcs)
+
+    image_arr = image.copy()
     # pixels_norm = pixels_norm.reshape(images_matrix[name].shape)
     image_arr[:, :, 0] = pixels_norm_y
+    image_arr[:, :, 1] = df["PixelsI"].to_numpy().reshape(image.shape[:-1])
+    image_arr[:, :, 2] = df["PixelsQ"].to_numpy().reshape(image.shape[:-1])
     image_arr = yiq2rgb(image_arr / 255)
 
-    # image_arr_m = image_arr[:, :, 0] - np.min(image_arr[:, :, 0])
-    # image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
-    # image_arr[:, :, 0] = image_arr_n
-    # image_arr_m = image_arr[:, :, 1] - np.min(image_arr[:, :, 1])
-    # image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
-    # image_arr[:, :, 1] = image_arr_n
-    # image_arr_m = image_arr[:, :, 2] - np.min(image_arr[:, :, 2])
-    # image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
-    # image_arr[:, :, 2] = image_arr_n
-
-    image_arr_m = image_arr - np.min(image_arr)
+    image_arr_m = image_arr[:, :, 0] - np.min(image_arr[:, :, 0])
     image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
+    image_arr[:, :, 0] = image_arr_n
+    image_arr_m = image_arr[:, :, 1] - np.min(image_arr[:, :, 1])
+    image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
+    image_arr[:, :, 1] = image_arr_n
+    image_arr_m = image_arr[:, :, 2] - np.min(image_arr[:, :, 2])
+    image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
+    image_arr[:, :, 2] = image_arr_n
 
-    st.write(image_arr_n.shape)
-    img_norm = Image.fromarray(image_arr_n.astype(np.uint8), mode="RGB")
+    # image_arr_m = image_arr - np.min(image_arr)
+    # image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
+    # image_arr = image_arr_n
+
+    img_norm = Image.fromarray(image_arr.astype(np.uint8), mode="RGB")
 
     histogram_df = get_histograma(
         pl.DataFrame(
             data={
-                "PixelsY": pixels_norm_y.reshape(reduce(mul, image_arr_n.shape[:-1])),
+                "PixelsY": pixels_norm_y.reshape(reduce(mul, image_arr.shape[:-1])),
+            },
+            schema={"PixelsY": pl.UInt8},
+        ),
+        "PixelsY",
+    )
+
+    histogramas_norm_yiq[name] = histogram_df
+    norm_yiq_images[name] = img_norm
+
+for name, df in histogramas_yiq.items():
+    histogram_norm_yiq = histogramas_norm_yiq[name]
+    col1, col2 = st.columns(2)
+    with col1:
+        st.plotly_chart(
+            px.bar(
+                title=f"Histograma {name}",
+                data_frame=df.to_pandas(),
+                x="PixelsY",
+                y="Qtd Pixels",
+            ),
+            use_container_width=True,
+        )
+    with col2:
+        st.plotly_chart(
+            px.bar(
+                title=f"Histograma {name} Normalizado",
+                data_frame=histogram_norm_yiq.to_pandas(),
+                x="PixelsY",
+                y="Qtd Pixels",
+            ),
+            use_container_width=True,
+        )
+    st.plotly_chart(
+        px.line(
+            data_frame=probs_yiq_dfs[name].to_pandas(),
+            x="IndexProb",
+            y="Probability",
+            color="Type",
+        )
+    )
+
+cols = st.columns(len(norm_yiq_images))
+
+for index, col in enumerate(cols):
+    with col:
+        st.image(list(norm_yiq_images.values())[index].convert("RGB"))
+
+
+images_dfs = get_img_dfs_yiq(image_matrixes)
+
+histogramas_yiq: Dict[str, pl.DataFrame] = dict()
+for name, df in images_dfs.items():
+    histogram_df = get_histograma(df, "PixelsY")
+    histogramas_yiq[name] = histogram_df
+
+conversion_yiq_funcs: Dict[str, np.ndarray] = dict()
+probs_yiq_dfs: Dict[str, pl.DataFrame] = dict()
+for name, histogram_df in histogramas_yiq.items():
+    probs_df_y = norm_hist(
+        histogram_df.sort("PixelsY", descending=False)["Qtd Pixels"].to_numpy()
+    )
+
+    probs_yiq_dfs[name] = probs_df_y
+
+    probs_rounded_y_df = probs_df_y.filter(pl.col("Type") == "Rounded Sum")
+
+    conversion_yiq_funcs[name] = probs_rounded_y_df["Probability"].to_numpy()
+
+
+histogramas_norm_yiq: Dict[str, pl.DataFrame] = dict()
+norm_yiq_images: Dict[str, Image.Image] = dict()
+for name, df in images_dfs.items():
+    image = image_matrixes[name]
+    pixels = df["PixelsY"].to_numpy().reshape(image.shape[:-1])
+
+    pixels_norm_y = apply_filter(name, pixels, conversion_yiq_funcs)
+
+    image_arr = image.copy()
+    # pixels_norm = pixels_norm.reshape(images_matrix[name].shape)
+    image_arr[:, :, 0] = pixels_norm_y
+    image_arr[:, :, 1] = df["PixelsI"].to_numpy().reshape(image.shape[:-1])
+    image_arr[:, :, 2] = df["PixelsQ"].to_numpy().reshape(image.shape[:-1])
+    image_arr = yiq2rgb(image_arr / 255)
+
+    image_arr_m = image_arr[:, :, 0] - np.min(image_arr[:, :, 0])
+    image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
+    image_arr[:, :, 0] = image_arr_n
+    image_arr_m = image_arr[:, :, 1] - np.min(image_arr[:, :, 1])
+    image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
+    image_arr[:, :, 1] = image_arr_n
+    image_arr_m = image_arr[:, :, 2] - np.min(image_arr[:, :, 2])
+    image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
+    image_arr[:, :, 2] = image_arr_n
+
+    # image_arr_m = image_arr - np.min(image_arr)
+    # image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
+    # image_arr = image_arr_n
+
+    img_norm = Image.fromarray(image_arr.astype(np.uint8), mode="RGB")
+
+    histogram_df = get_histograma(
+        pl.DataFrame(
+            data={
+                "PixelsY": pixels_norm_y.reshape(reduce(mul, image_arr.shape[:-1])),
             },
             schema={"PixelsY": pl.UInt8},
         ),
