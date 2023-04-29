@@ -224,7 +224,6 @@ for name, histogram_df in histogramas.items():
 
 
 def _apply_filter(pixels: np.ndarray, name: str, func: Dict[str, np.ndarray]):
-    st.write(pixels)
     result = np.array(list(map(lambda x: func[name][int(x)], pixels)))
     return result
 
