@@ -1,21 +1,28 @@
-from functools import partial, reduce
-from multiprocessing.pool import ThreadPool
-from operator import mul
-from pathlib import Path
-from typing import Dict, List
 import numpy as np
 import plotly.express as px
 import polars as pl
-from typing import Union, Literal
 import streamlit as st
+from typing import Dict
 from PIL import Image
+from functools import reduce
+from operator import mul
+from skimage.color import rgb2yiq, yiq2rgb
+from trabalho_contraste.dashboard.commom import (
+    load_images,
+    get_img_matrixes,
+    IMG_FOLDER,
+    get_img_dfs,
+    get_metrics,
+    apply_filter,
+    get_histograma,
+    norm_hist,
+)
 
 st.title("Contraste - Operação sobre Pixel")
 
 st.subheader("Etapa 1")
 
 # Load images
-IMG_FOLDER = Path("data")
 image_paths = [
     IMG_FOLDER / "figuraEscura.jpg",
     IMG_FOLDER / "figuraClara.jpg",
@@ -23,18 +30,10 @@ image_paths = [
 ]
 
 
-@st.cache_data
-def load_images(
-    image_paths: List[Path], color_scheme: Literal["RGB", "L"] = "L"
-) -> Dict[str, Image.Image]:
-    return {
-        image_path.name: Image.open(image_path).convert(color_scheme)
-        for image_path in image_paths
-    }
-
-
 images = load_images(image_paths=image_paths)
 # st.write([image.mode for image in images])
+
+st.markdown("#### Imagens Originais")
 
 cols = st.columns(len(images))
 for index, col in enumerate(cols):
@@ -43,22 +42,9 @@ for index, col in enumerate(cols):
 
 
 # Images as dataframe
-@st.cache_data
-def get_img_matrixes(images: Dict[str, Image.Image]):
-    return {name: np.array(image) for name, image in images.items()}
 
 
 images_matrix = get_img_matrixes(images)
-
-
-def get_img_dfs(images_matrix: Dict[str, np.ndarray]):
-    return {
-        name: pl.DataFrame(
-            data={"Pixels": matrix.reshape(reduce(mul, matrix.shape))},
-            schema={"Pixels": pl.UInt8},
-        )
-        for name, matrix in images_matrix.items()
-    }
 
 
 images_dfs = get_img_dfs(images_matrix)
@@ -68,23 +54,12 @@ images_dfs = get_img_dfs(images_matrix)
 # for df in images_dfs:
 #     print(df.describe())
 
-st.markdown("### Métricas")
-
-
-def get_metrics(images_dfs: Dict[str, pl.DataFrame], images: Dict[str, Image.Image]):
-    return pl.DataFrame(
-        data={
-            "Nomes": list(images_dfs.keys()),
-            "Médias": [df["Pixels"].mean() for df in images_dfs.values()],
-            "Desvios": [df["Pixels"].std() for df in images_dfs.values()],
-            "Entropias": [image.entropy() for image in images.values()],
-        }
-    )
+st.markdown("#### Métricas")
 
 
 st.dataframe(get_metrics(images_dfs, images).to_pandas())
 
-st.markdown("### Histogramas")
+st.markdown("#### Histogramas")
 
 # Histogram
 for name, df in images_dfs.items():
@@ -112,7 +87,9 @@ for name, df in images_dfs.items():
         )
     )
 
-# -------------------------------------- Parte 2 --------------------------------------
+# ------------------------------- Etapa 2 -------------------------------
+
+
 st.subheader("Etapa 2")
 
 # Load Images
@@ -126,7 +103,7 @@ image_paths = [
 images = load_images(image_paths)
 
 cols = st.columns(len(images))
-
+st.markdown("#### Imagens Originais")
 for index, col in enumerate(cols):
     with col:
         st.image(list(images.values())[index])
@@ -135,79 +112,18 @@ for index, col in enumerate(cols):
 images_matrix = get_img_matrixes(images)
 images_dfs = get_img_dfs(images_matrix)
 
-st.markdown("### Métricas")
+st.markdown("#### Métricas")
 
 st.dataframe(get_metrics(images_dfs, images).to_pandas())
 
 
-@st.cache_data
-def norm_hist(histograma: np.ndarray):
-    probabilities = histograma / histograma.sum()
-    summed_probs = np.array(
-        list(reduce(lambda old, new: [*old, old[-1] + new], probabilities, [0]))[1:]
-    )
-
-    summed_probs_rounded = np.rint(255 * summed_probs)
-
-    probs_df = pl.DataFrame(
-        {
-            "IndexProb": [
-                *list(range(summed_probs.shape[0])),
-                *list(range(summed_probs_rounded.shape[0])),
-            ],
-            "Probability": [*(255 * summed_probs), *summed_probs_rounded],
-            "Type": [
-                *["Sum" for _ in range(summed_probs.shape[0])],
-                *["Rounded Sum" for _ in range(summed_probs_rounded.shape[0])],
-            ],
-        }
-    )
-
-    return probs_df
-
-
 histogramas: Dict[str, pl.DataFrame] = dict()
-
-
-def get_histograma(
-    df: pl.DataFrame, pixel_col: Union[Literal["Pixels"], str] = "Pixels"
-):
-    grouped_df = (
-        df.groupby(pixel_col)
-        .agg(pl.col(pixel_col).count().alias("Qtd Pixels").cast(pl.UInt64))
-        .with_columns([pl.col(pixel_col).cast(pl.UInt8)])
-    )
-
-    non_existent_gray_values = np.array(
-        [grey for grey in range(256) if grey not in grouped_df[pixel_col].unique()],
-        dtype=np.uint8,
-    )
-
-    missing_df = pl.DataFrame(
-        {
-            pixel_col: non_existent_gray_values,
-            "Qtd Pixels": np.zeros(non_existent_gray_values.shape),
-        },
-        schema={pixel_col: pl.UInt8, "Qtd Pixels": pl.UInt64},
-    )
-
-    histogram_df = pl.concat([grouped_df, missing_df], how="vertical")
-    return histogram_df
 
 
 # Histogram
 for name, df in images_dfs.items():
     histogram_df = get_histograma(df)
     histogramas[name] = histogram_df
-
-    # st.plotly_chart(
-    #     px.bar(
-    #         title=f"Histograma {name}",
-    #         data_frame=histogram_df.to_pandas(),
-    #         x="Pixels",
-    #         y="Qtd Pixels",
-    #     )
-    # )
 
 conversion_funcs: Dict[str, np.ndarray] = dict()
 probs_dfs: Dict[str, pl.DataFrame] = dict()
@@ -223,22 +139,6 @@ for name, histogram_df in histogramas.items():
     conversion_funcs[name] = probs_rounded["Probability"].to_numpy()
 
 
-def _apply_filter(pixels: np.ndarray, name: str, func: Dict[str, np.ndarray]):
-    result = np.array(list(map(lambda x: func[name][int(x)], pixels)))
-    return result
-
-
-@st.cache_data
-def apply_filter(
-    name: str, pixels: np.ndarray, conversion_rgb_funcs: Dict[str, np.ndarray]
-):
-    with ThreadPool() as pool:
-        result = pool.map(
-            partial(_apply_filter, name=name, func=conversion_rgb_funcs), pixels
-        )
-    return np.array(result)
-
-
 norm_images: Dict[str, Image.Image] = dict()
 for name, image in images.items():
     pixels = np.array(image)
@@ -246,15 +146,13 @@ for name, image in images.items():
     # pixels_norm = pixels_norm.reshape(images_matrix[name].shape)
     img_norm = Image.fromarray(pixels_norm)
     norm_images[name] = img_norm
-    # # img_norm.show()
-    # st.image(img_norm.convert("RGB"))
-
-    # TODO(Otavio): Still need to reapply metrics, and redo histograms
 
 norm_images_matrix = get_img_matrixes(norm_images)
 norm_images_dfs = get_img_dfs(norm_images_matrix)
 
 histogramas_norm: Dict[str, pl.DataFrame] = dict()
+st.markdown("#### Histogramas")
+
 for name, df in norm_images_dfs.items():
     histogram_df_norm = get_histograma(df)
     histogram_df = histogramas[name]
@@ -283,6 +181,7 @@ for name, df in norm_images_dfs.items():
         )
     st.plotly_chart(
         px.line(
+            title=f"Probabilidade Somada {name}",
             data_frame=probs_dfs[name].to_pandas(),
             x="IndexProb",
             y="Probability",
@@ -290,11 +189,15 @@ for name, df in norm_images_dfs.items():
         )
     )
 
-cols = st.columns(len(norm_images))
 
+st.markdown("#### Imagens Normalizadas")
+
+cols = st.columns(len(norm_images))
 for index, col in enumerate(cols):
     with col:
         st.image(list(norm_images.values())[index].convert("RGB"))
+
+# ------------------------------- Etapa 3 -------------------------------
 
 st.subheader("Etapa 3")
 image_paths = [
@@ -304,8 +207,9 @@ image_paths = [
 
 images = load_images(image_paths, "RGB")
 
-cols = st.columns(len(images))
+st.markdown("#### Imagens Originais")
 
+cols = st.columns(len(images))
 for index, col in enumerate(cols):
     with col:
         st.image(list(images.values())[index])
@@ -390,17 +294,11 @@ for name, image in images.items():
     img_norm = Image.fromarray(image_arr)
     norm_rgb_images[name] = img_norm
 
+st.markdown("#### Imagens Normalizadas sobre canais RGB")
 cols = st.columns(len(norm_rgb_images))
-
 for index, col in enumerate(cols):
     with col:
         st.image(list(norm_rgb_images.values())[index].convert("RGB"))
-
-from skimage.color import rgb2yiq, yiq2rgb
-
-
-def convert_to_yiq():
-    ...
 
 
 def get_img_dfs_yiq(images_matrix: Dict[str, np.ndarray]):
@@ -498,6 +396,14 @@ for name, df in images_dfs.items():
     histogramas_norm_yiq[name] = histogram_df
     norm_yiq_images[name] = img_norm
 
+
+st.markdown("#### Imagens Normalizadas sobre canal Y (YIQ)")
+cols = st.columns(len(norm_yiq_images))
+for index, col in enumerate(cols):
+    with col:
+        st.image(list(norm_yiq_images.values())[index].convert("RGB"))
+
+st.markdown("#### Histogramas Y")
 for name, df in histogramas_yiq.items():
     histogram_norm_yiq = histogramas_norm_yiq[name]
     col1, col2 = st.columns(2)
@@ -530,14 +436,53 @@ for name, df in histogramas_yiq.items():
         )
     )
 
-cols = st.columns(len(norm_yiq_images))
-
-for index, col in enumerate(cols):
-    with col:
-        st.image(list(norm_yiq_images.values())[index].convert("RGB"))
+st.subheader("Implementação Própria de Conversão YIQ")
 
 
-images_dfs = get_img_dfs_yiq(image_matrixes)
+def convert_rgb_to_yiq(matriz: np.ndarray):
+    yiq_from_rgb = np.array(
+        [
+            [0.299, 0.587, 0.114],
+            [0.59590059, -0.27455667, -0.32134392],
+            [0.21153661, -0.52273617, 0.31119955],
+        ]
+    )
+    image_arr = np.dot(matriz / 255.0, yiq_from_rgb.T.copy())
+    # image_arr_m = image_arr[:, :, 0] - np.min(image_arr[:, :, 0])
+    # image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
+    # image_arr[:, :, 0] = image_arr_n
+    # image_arr_m = image_arr[:, :, 1] - np.min(image_arr[:, :, 1])
+    # image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
+    # image_arr[:, :, 1] = image_arr_n
+    # image_arr_m = image_arr[:, :, 2] - np.min(image_arr[:, :, 2])
+    # image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
+    # image_arr[:, :, 2] = image_arr_n
+    image_arr_n = image_arr - np.min(image_arr)
+    image_arr = image_arr_n / np.max(image_arr_n)
+    return (255 * image_arr).astype(np.uint8)
+
+
+def get_img_dfs_own_yiq(images_matrix: Dict[str, np.ndarray]):
+    return {
+        name: pl.DataFrame(
+            data={
+                "PixelsY": matrix[:, :, 0].reshape(reduce(mul, matrix.shape[:-1])),
+                "PixelsI": matrix[:, :, 1].reshape(reduce(mul, matrix.shape[:-1])),
+                "PixelsQ": matrix[:, :, 2].reshape(reduce(mul, matrix.shape[:-1])),
+            },
+            schema={"PixelsY": pl.UInt8, "PixelsI": pl.UInt8, "PixelsQ": pl.UInt8},
+        )
+        for name, matrix in [
+            (
+                name,
+                convert_rgb_to_yiq(image),
+            )
+            for name, image in images_matrix.items()
+        ]
+    }
+
+
+images_dfs = get_img_dfs_own_yiq(image_matrixes)
 
 histogramas_yiq: Dict[str, pl.DataFrame] = dict()
 for name, df in images_dfs.items():
@@ -602,6 +547,13 @@ for name, df in images_dfs.items():
     histogramas_norm_yiq[name] = histogram_df
     norm_yiq_images[name] = img_norm
 
+st.markdown("#### Imagens Normalizadas sobre canal Y (YIQ)")
+cols = st.columns(len(norm_yiq_images))
+for index, col in enumerate(cols):
+    with col:
+        st.image(list(norm_yiq_images.values())[index].convert("RGB"))
+
+st.markdown("#### Histogramas Y")
 for name, df in histogramas_yiq.items():
     histogram_norm_yiq = histogramas_norm_yiq[name]
     col1, col2 = st.columns(2)
@@ -633,9 +585,3 @@ for name, df in histogramas_yiq.items():
             color="Type",
         )
     )
-
-cols = st.columns(len(norm_yiq_images))
-
-for index, col in enumerate(cols):
-    with col:
-        st.image(list(norm_yiq_images.values())[index].convert("RGB"))
