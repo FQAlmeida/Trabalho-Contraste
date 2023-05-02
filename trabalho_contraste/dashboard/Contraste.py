@@ -1,4 +1,5 @@
 import numpy as np
+from numpy import linalg
 import plotly.express as px
 import polars as pl
 import streamlit as st
