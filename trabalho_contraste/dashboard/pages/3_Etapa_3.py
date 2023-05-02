@@ -256,7 +256,7 @@ for name, df in histogramas_yiq.items():
 st.subheader("Implementação Própria de Conversão YIQ")
 
 
-def convert_rgb_to_yiq(matriz: np.ndarray):
+def convert_rgb_to_yiq(matriz: np.ndarray) -> np.ndarray:
     yiq_from_rgb = np.array(
         [
             [0.299, 0.587, 0.114],
@@ -299,7 +299,7 @@ def get_img_dfs_own_yiq(images_matrix: Dict[str, np.ndarray]):
     }
 
 
-images_dfs = get_img_dfs_own_yiq(image_matrixes)
+images_dfs = get_img_dfs_own_yiq(images_matrix=image_matrixes)
 
 histogramas_yiq: Dict[str, pl.DataFrame] = dict()
 for name, df in images_dfs.items():
