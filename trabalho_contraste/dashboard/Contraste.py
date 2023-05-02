@@ -447,7 +447,7 @@ def convert_rgb_to_yiq(matriz: np.ndarray) -> np.ndarray:
             [0.21153661, -0.52273617, 0.31119955],
         ]
     )
-    image_arr = np.dot(matriz / 255.0, yiq_from_rgb.T.copy())
+    image_arr = (matriz @ yiq_from_rgb.T.copy()).astype(np.float64)
     # image_arr_m = image_arr[:, :, 0] - np.min(image_arr[:, :, 0])
     # image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
     # image_arr[:, :, 0] = image_arr_n
@@ -469,23 +469,24 @@ def convert_yiq_to_rgb(matriz: np.ndarray) -> np.ndarray:
             [0.21153661, -0.52273617, 0.31119955],
         ]
     )
-    image_arr = np.dot(matriz / 255.0, linalg.inv(yiq_from_rgb).T.copy())
-    # image_arr_m = image_arr[:, :, 0] - np.min(image_arr[:, :, 0])
-    # image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
-    # image_arr[:, :, 0] = image_arr_n
-    # image_arr_m = image_arr[:, :, 1] - np.min(image_arr[:, :, 1])
-    # image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
-    # image_arr[:, :, 1] = image_arr_n
-    # image_arr_m = image_arr[:, :, 2] - np.min(image_arr[:, :, 2])
-    # image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
-    # image_arr[:, :, 2] = image_arr_n
-    image_arr_n = image_arr - np.min(image_arr)
-    image_arr = image_arr_n / np.max(image_arr_n)
-    return (255 * image_arr).astype(np.uint8)
+    image_arr = (matriz @ linalg.inv(yiq_from_rgb).T.copy()).astype(np.float64)
+    
+    # image_arr_n = image_arr - np.min(image_arr)
+    # image_arr = image_arr_n / np.max(image_arr_n)
+    
+    image_arr_m = image_arr[:, :, 0] - np.min(image_arr[:, :, 0])
+    image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
+    image_arr[:, :, 0] = image_arr_n
+    image_arr_m = image_arr[:, :, 1] - np.min(image_arr[:, :, 1])
+    image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
+    image_arr[:, :, 1] = image_arr_n
+    image_arr_m = image_arr[:, :, 2] - np.min(image_arr[:, :, 2])
+    image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
+    image_arr[:, :, 2] = image_arr_n
 
-def get_img_dfs_own_yiq(
-    images_matrix: Dict[str, np.ndarray]
-) -> Dict[str, pl.DataFrame]:
+    return (image_arr).astype(np.uint8)
+
+def get_img_dfs_own_yiq(images_matrix: Dict[str, np.ndarray]):
     return {
         name: pl.DataFrame(
             data={
