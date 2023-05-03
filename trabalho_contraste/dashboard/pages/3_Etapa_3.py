@@ -277,7 +277,7 @@ def convert_rgb_to_yiq(matriz: np.ndarray) -> np.ndarray:
     # image_arr[:, :, 2] = image_arr_n
     image_arr_n = image_arr - np.min(image_arr)
     image_arr = image_arr_n / np.max(image_arr_n)
-    return (255 * image_arr).astype(np.uint8)
+    return np.rint(255 * image_arr).astype(np.uint8)
 
 def convert_yiq_to_rgb(matriz: np.ndarray) -> np.ndarray:
     yiq_from_rgb = np.array(
