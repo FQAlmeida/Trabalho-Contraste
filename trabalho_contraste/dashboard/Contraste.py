@@ -8,7 +8,7 @@ from PIL import Image
 from functools import reduce
 from operator import mul
 from skimage.color import rgb2yiq, yiq2rgb
-from trabalho_contraste.dashboard.commom import (
+from trabalho_contraste.commom import (
     load_images,
     get_img_matrixes,
     IMG_FOLDER,

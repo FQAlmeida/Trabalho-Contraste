@@ -4,7 +4,7 @@ import plotly.express as px
 import polars as pl
 import streamlit as st
 from PIL import Image
-from trabalho_contraste.dashboard.commom import (
+from trabalho_contraste.commom import (
     IMG_FOLDER,
     apply_filter,
     get_histograma,

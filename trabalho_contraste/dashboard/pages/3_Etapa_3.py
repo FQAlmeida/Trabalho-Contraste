@@ -8,7 +8,7 @@ import polars as pl
 from skimage.color import rgb2yiq, yiq2rgb
 import streamlit as st
 from PIL import Image
-from trabalho_contraste.dashboard.commom import (
+from trabalho_contraste.commom import (
     IMG_FOLDER,
     apply_filter,
     norm_hist,

@@ -2,7 +2,7 @@ import numpy as np
 import plotly.express as px
 import polars as pl
 import streamlit as st
-from trabalho_contraste.dashboard.commom import (
+from trabalho_contraste.commom import (
     load_images,
     get_img_matrixes,
     IMG_FOLDER,
