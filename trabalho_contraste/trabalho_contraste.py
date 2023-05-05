@@ -7,7 +7,7 @@ from PIL import Image
 from functools import reduce
 from operator import mul
 from skimage.color import rgb2yiq, yiq2rgb
-from trabalho_contraste.commom import (
+from commom import (
     load_images,
     get_img_matrixes,
     IMG_FOLDER,
@@ -18,9 +18,9 @@ from trabalho_contraste.commom import (
     norm_hist,
 )
 
-st.title("Contraste - Operação sobre Pixel")
+print("Contraste - Operação sobre Pixel")
 
-st.subheader("Etapa 1")
+print("Etapa 1")
 
 # Load images
 image_paths = [
@@ -29,24 +29,15 @@ image_paths = [
     IMG_FOLDER / "lena_B.png",
 ]
 
-
 images = load_images(image_paths=image_paths)
 # st.write([image.mode for image in images])
 
-st.markdown("#### Imagens Originais")
+print("#### Imagens Originais")
 
-cols = st.columns(len(images))
-for index, col in enumerate(cols):
-    with col:
-        st.image(list(images.values())[index])
-
-
-# Images as dataframe
-
+for image in images.values():
+    image.show()
 
 images_matrix = get_img_matrixes(images)
-
-
 images_dfs = get_img_dfs(images_matrix)
 
 # Avg and Std Dev can be derive from dataframe
@@ -54,12 +45,12 @@ images_dfs = get_img_dfs(images_matrix)
 # for df in images_dfs:
 #     print(df.describe())
 
-st.markdown("#### Métricas")
+print("#### Métricas")
 
 
-st.dataframe(get_metrics(images_dfs, images).to_pandas())
+print(get_metrics(images_dfs, images).to_pandas())
 
-st.markdown("#### Histogramas")
+print("#### Histogramas")
 
 # Histogram
 for name, df in images_dfs.items():
@@ -78,19 +69,18 @@ for name, df in images_dfs.items():
         schema={"Pixels": pl.UInt8, "Qtd Pixels": pl.UInt64},
     )
     histogram_df = pl.concat([grouped_df, missing_df], how="vertical")
-    st.plotly_chart(
-        px.bar(
-            title=f"Histograma {name}",
-            data_frame=histogram_df.to_pandas(),
-            x="Pixels",
-            y="Qtd Pixels",
-        )
-    )
+
+    px.bar(
+        title=f"Histograma {name}",
+        data_frame=histogram_df.to_pandas(),
+        x="Pixels",
+        y="Qtd Pixels",
+    ).show()
 
 # ------------------------------- Etapa 2 -------------------------------
 
 
-st.subheader("Etapa 2")
+print("Etapa 2")
 
 # Load Images
 image_paths = [
@@ -102,19 +92,17 @@ image_paths = [
 
 images = load_images(image_paths)
 
-cols = st.columns(len(images))
-st.markdown("#### Imagens Originais")
-for index, col in enumerate(cols):
-    with col:
-        st.image(list(images.values())[index])
+print("#### Imagens Originais")
+for image in images.values():
+    image.show()
 
 # Images as dataframe
 images_matrix = get_img_matrixes(images)
 images_dfs = get_img_dfs(images_matrix)
 
-st.markdown("#### Métricas")
+print("#### Métricas")
 
-st.dataframe(get_metrics(images_dfs, images).to_pandas())
+print(get_metrics(images_dfs, images).to_pandas())
 
 
 histogramas: Dict[str, pl.DataFrame] = dict()
@@ -151,55 +139,42 @@ norm_images_matrix = get_img_matrixes(norm_images)
 norm_images_dfs = get_img_dfs(norm_images_matrix)
 
 histogramas_norm: Dict[str, pl.DataFrame] = dict()
-st.markdown("#### Histogramas")
+print("#### Histogramas")
 
 for name, df in norm_images_dfs.items():
     histogram_df_norm = get_histograma(df)
     histogram_df = histogramas[name]
     histogramas_norm[name] = histogram_df_norm
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.plotly_chart(
-            px.bar(
-                title=f"Histograma {name}",
-                data_frame=histogram_df.to_pandas(),
-                x="Pixels",
-                y="Qtd Pixels",
-            ),
-            use_container_width=True,
-        )
-    with col2:
-        st.plotly_chart(
-            px.bar(
-                title=f"Histograma {name} Normalizado",
-                data_frame=histogram_df_norm.to_pandas(),
-                x="Pixels",
-                y="Qtd Pixels",
-            ),
-            use_container_width=True,
-        )
-    st.plotly_chart(
-        px.line(
-            title=f"Probabilidade Somada {name}",
-            data_frame=probs_dfs[name].to_pandas(),
-            x="IndexProb",
-            y="Probability",
-            color="Type",
-        )
-    )
+    px.bar(
+        title=f"Histograma {name}",
+        data_frame=histogram_df.to_pandas(),
+        x="Pixels",
+        y="Qtd Pixels",
+    ).show()
+    px.bar(
+        title=f"Histograma {name} Normalizado",
+        data_frame=histogram_df_norm.to_pandas(),
+        x="Pixels",
+        y="Qtd Pixels",
+    ).show()
+    px.line(
+        title=f"Probabilidade Somada {name}",
+        data_frame=probs_dfs[name].to_pandas(),
+        x="IndexProb",
+        y="Probability",
+        color="Type",
+    ).show()
 
 
-st.markdown("#### Imagens Normalizadas")
+print("#### Imagens Normalizadas")
 
-cols = st.columns(len(norm_images))
-for index, col in enumerate(cols):
-    with col:
-        st.image(list(norm_images.values())[index].convert("RGB"))
+for image in norm_images.values():
+    image.show()
 
 # ------------------------------- Etapa 3 -------------------------------
 
-st.subheader("Etapa 3")
+print("Etapa 3")
 image_paths = [
     IMG_FOLDER / "outono_LC.png",
     IMG_FOLDER / "predios.jpeg",
@@ -207,12 +182,10 @@ image_paths = [
 
 images = load_images(image_paths, "RGB")
 
-st.markdown("#### Imagens Originais")
+print("#### Imagens Originais")
 
-cols = st.columns(len(images))
-for index, col in enumerate(cols):
-    with col:
-        st.image(list(images.values())[index])
+for image in images.values():
+    image.show()
 
 image_matrixes = get_img_matrixes(images)
 
@@ -294,11 +267,9 @@ for name, image in images.items():
     img_norm = Image.fromarray(image_arr)
     norm_rgb_images[name] = img_norm
 
-st.markdown("#### Imagens Normalizadas sobre canais RGB")
-cols = st.columns(len(norm_rgb_images))
-for index, col in enumerate(cols):
-    with col:
-        st.image(list(norm_rgb_images.values())[index].convert("RGB"))
+print("#### Imagens Normalizadas sobre canais RGB")
+for image in norm_rgb_images.values():
+    image.show()
 
 
 def get_img_dfs_yiq(images_matrix: Dict[str, np.ndarray]):
@@ -397,46 +368,33 @@ for name, df in images_dfs.items():
     norm_yiq_images[name] = img_norm
 
 
-st.markdown("#### Imagens Normalizadas sobre canal Y (YIQ)")
-cols = st.columns(len(norm_yiq_images))
-for index, col in enumerate(cols):
-    with col:
-        st.image(list(norm_yiq_images.values())[index].convert("RGB"))
+print("#### Imagens Normalizadas sobre canal Y (YIQ)")
+for image in norm_yiq_images.values():
+    image.show()
 
-st.markdown("#### Histogramas Y")
+print("#### Histogramas Y")
 for name, df in histogramas_yiq.items():
     histogram_norm_yiq = histogramas_norm_yiq[name]
-    col1, col2 = st.columns(2)
-    with col1:
-        st.plotly_chart(
-            px.bar(
-                title=f"Histograma {name}",
-                data_frame=df.to_pandas(),
-                x="PixelsY",
-                y="Qtd Pixels",
-            ),
-            use_container_width=True,
-        )
-    with col2:
-        st.plotly_chart(
-            px.bar(
-                title=f"Histograma {name} Normalizado",
-                data_frame=histogram_norm_yiq.to_pandas(),
-                x="PixelsY",
-                y="Qtd Pixels",
-            ),
-            use_container_width=True,
-        )
-    st.plotly_chart(
-        px.line(
-            data_frame=probs_yiq_dfs[name].to_pandas(),
-            x="IndexProb",
-            y="Probability",
-            color="Type",
-        )
-    )
+    px.bar(
+        title=f"Histograma {name}",
+        data_frame=df.to_pandas(),
+        x="PixelsY",
+        y="Qtd Pixels",
+    ).show()
+    px.bar(
+        title=f"Histograma {name} Normalizado",
+        data_frame=histogram_norm_yiq.to_pandas(),
+        x="PixelsY",
+        y="Qtd Pixels",
+    ).show()
+    px.line(
+        data_frame=probs_yiq_dfs[name].to_pandas(),
+        x="IndexProb",
+        y="Probability",
+        color="Type",
+    ).show()
 
-st.subheader("Implementação Própria de Conversão YIQ")
+print("Implementação Própria de Conversão YIQ")
 
 
 def convert_rgb_to_yiq(matriz: np.ndarray) -> np.ndarray:
@@ -461,6 +419,7 @@ def convert_rgb_to_yiq(matriz: np.ndarray) -> np.ndarray:
     image_arr = image_arr_n / np.max(image_arr_n)
     return (255 * image_arr).astype(np.uint8)
 
+
 def convert_yiq_to_rgb(matriz: np.ndarray) -> np.ndarray:
     yiq_from_rgb = np.array(
         [
@@ -470,10 +429,10 @@ def convert_yiq_to_rgb(matriz: np.ndarray) -> np.ndarray:
         ]
     )
     image_arr = (matriz @ linalg.inv(yiq_from_rgb).T.copy()).astype(np.float64)
-    
+
     # image_arr_n = image_arr - np.min(image_arr)
     # image_arr = image_arr_n / np.max(image_arr_n)
-    
+
     image_arr_m = image_arr[:, :, 0] - np.min(image_arr[:, :, 0])
     image_arr_n = np.rint(255 * (image_arr_m / np.max(image_arr_m)))
     image_arr[:, :, 0] = image_arr_n
@@ -485,6 +444,7 @@ def convert_yiq_to_rgb(matriz: np.ndarray) -> np.ndarray:
     image_arr[:, :, 2] = image_arr_n
 
     return (image_arr).astype(np.uint8)
+
 
 def get_img_dfs_own_yiq(images_matrix: Dict[str, np.ndarray]):
     return {
@@ -571,41 +531,28 @@ for name, df in images_dfs.items():
     histogramas_norm_yiq[name] = histogram_df
     norm_yiq_images[name] = img_norm
 
-st.markdown("#### Imagens Normalizadas sobre canal Y (YIQ)")
-cols = st.columns(len(norm_yiq_images))
-for index, col in enumerate(cols):
-    with col:
-        st.image(list(norm_yiq_images.values())[index].convert("RGB"))
+print("#### Imagens Normalizadas sobre canal Y (YIQ)")
+for image in norm_yiq_images.values():
+    image.show()
 
-st.markdown("#### Histogramas Y")
+print("#### Histogramas Y")
 for name, df in histogramas_yiq.items():
     histogram_norm_yiq = histogramas_norm_yiq[name]
-    col1, col2 = st.columns(2)
-    with col1:
-        st.plotly_chart(
-            px.bar(
-                title=f"Histograma {name}",
-                data_frame=df.to_pandas(),
-                x="PixelsY",
-                y="Qtd Pixels",
-            ),
-            use_container_width=True,
-        )
-    with col2:
-        st.plotly_chart(
-            px.bar(
-                title=f"Histograma {name} Normalizado",
-                data_frame=histogram_norm_yiq.to_pandas(),
-                x="PixelsY",
-                y="Qtd Pixels",
-            ),
-            use_container_width=True,
-        )
-    st.plotly_chart(
-        px.line(
-            data_frame=probs_yiq_dfs[name].to_pandas(),
-            x="IndexProb",
-            y="Probability",
-            color="Type",
-        )
-    )
+    px.bar(
+        title=f"Histograma {name}",
+        data_frame=df.to_pandas(),
+        x="PixelsY",
+        y="Qtd Pixels",
+    ).show()
+    px.bar(
+        title=f"Histograma {name} Normalizado",
+        data_frame=histogram_norm_yiq.to_pandas(),
+        x="PixelsY",
+        y="Qtd Pixels",
+    ).show()
+    px.line(
+        data_frame=probs_yiq_dfs[name].to_pandas(),
+        x="IndexProb",
+        y="Probability",
+        color="Type",
+    ).show()
