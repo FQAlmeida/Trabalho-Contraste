@@ -2,7 +2,14 @@
 
 Esse trabalho foi desenvolvido durante no Semestre 01/2023, para a disciplina de Processamento de Imagens (PIM).
 
-Universidade Estadual de Santa Catarina 
+Universidade Estadual de Santa Catarina.
+
+Autores:
+- Andrei
+- Otávio Almeida
+
+Orientador:
+- Gilmário B. Santos
 
 ## Instruções de Instalação
 
