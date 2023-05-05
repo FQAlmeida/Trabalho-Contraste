@@ -16,6 +16,7 @@ pyarrow = "^11.0.0"
 taskipy = "^1.10.4"
 streamlit = "^1.21.0"
 scikit-image = "^0.20.0"
+ipykernel = "^6.22.0"
 
 
 [tool.poetry.group.dev.dependencies]
