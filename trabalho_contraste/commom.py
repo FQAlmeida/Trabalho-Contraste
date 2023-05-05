@@ -1,6 +1,5 @@
 from multiprocessing.pool import ThreadPool
 from pathlib import Path
-import streamlit as st
 from PIL import Image
 from typing import List, Literal, Dict, Union
 import numpy as np
@@ -11,7 +10,6 @@ from operator import mul
 IMG_FOLDER = Path("data")
 
 
-@st.cache_data
 def load_images(
     image_paths: List[Path], color_scheme: Literal["RGB", "L"] = "L"
 ) -> Dict[str, Image.Image]:
@@ -21,7 +19,6 @@ def load_images(
     }
 
 
-@st.cache_data
 def get_img_matrixes(images: Dict[str, Image.Image]):
     return {name: np.array(image) for name, image in images.items()}
 
@@ -73,7 +70,6 @@ def get_histograma(
     return histogram_df
 
 
-@st.cache_data
 def norm_hist(histograma: np.ndarray):
     probabilities = histograma / histograma.sum()
     summed_probs = np.array(
@@ -104,7 +100,6 @@ def _apply_filter(pixels: np.ndarray, name: str, func: Dict[str, np.ndarray]):
     return result
 
 
-@st.cache_data
 def apply_filter(
     name: str, pixels: np.ndarray, conversion_rgb_funcs: Dict[str, np.ndarray]
 ):
